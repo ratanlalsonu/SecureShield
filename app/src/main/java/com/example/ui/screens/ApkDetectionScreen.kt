@@ -81,13 +81,20 @@ fun ApkDetectionScreen(
     uiState: AnalysisUiState,
     onInstall: (String) -> Unit,
     onCancel: () -> Unit,
+    onRescan: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
 
     when (uiState) {
         is AnalysisUiState.Analyzing -> {
-            AnalyzingProgressView(uiState.progress, uiState.stage)
+            AnalyzingProgressView(
+                progress = uiState.progress,
+                stage = uiState.stage,
+                fileName = uiState.fileName,
+                fileSize = uiState.fileSize,
+                sourceApp = uiState.sourceApp
+            )
         }
         is AnalysisUiState.Analyzed -> {
             AnalyzedReportView(
@@ -95,7 +102,8 @@ fun ApkDetectionScreen(
                 evaluation = uiState.evaluation,
                 isDuplicate = uiState.isDuplicate,
                 onInstall = onInstall,
-                onCancel = onCancel
+                onCancel = onCancel,
+                onRescan = onRescan
             )
         }
         is AnalysisUiState.Installing -> {
@@ -127,7 +135,13 @@ fun ApkDetectionScreen(
 }
 
 @Composable
-private fun AnalyzingProgressView(progress: Float, stage: String) {
+private fun AnalyzingProgressView(
+    progress: Float,
+    stage: String,
+    fileName: String? = null,
+    fileSize: Long? = null,
+    sourceApp: String? = null
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -136,6 +150,50 @@ private fun AnalyzingProgressView(progress: Float, stage: String) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        if (!fileName.isNullOrBlank()) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 20.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = ShieldBluePrimary.copy(alpha = 0.12f)
+                    ) {
+                        Text(
+                            text = "APK DETECTED",
+                            color = ShieldBluePrimary,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = fileName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "${if (fileSize != null && fileSize > 0) String.format(java.util.Locale.US, "%.1f MB", fileSize / (1024f * 1024f)) else ""} • Source: ${sourceApp ?: "External Source"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
         Box(
             modifier = Modifier
                 .size(72.dp)
@@ -229,7 +287,8 @@ private fun AnalyzedReportView(
     evaluation: RiskEvaluation,
     isDuplicate: Boolean,
     onInstall: (String) -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    onRescan: () -> Unit = {}
 ) {
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("Overview", "App Info", "Permissions", "Components", "Recommendation")
@@ -314,24 +373,47 @@ private fun AnalyzedReportView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(10.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Row(
-                    modifier = Modifier.padding(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = "Duplicate",
-                        tint = ShieldBluePrimary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Previously analyzed APK detected (matching SHA-256).",
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Duplicate",
+                            tint = ShieldBluePrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "Previously analyzed APK detected",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Matching SHA-256 in local security database.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = onRescan,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.testTag("rescan_duplicate_button")
+                    ) {
+                        Text("Scan Again", style = MaterialTheme.typography.labelSmall)
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -834,7 +916,7 @@ private fun RecommendationTab(
                     .fillMaxWidth()
                     .testTag("install_app_button"),
                 shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ShieldBluePrimary)
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
                 Icon(
                     imageVector = Icons.Default.Lock,
@@ -871,9 +953,9 @@ private fun EnvironmentOptionCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) ShieldBluePrimary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface
+            containerColor = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface
         ),
-        border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, ShieldBluePrimary) else null,
+        border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
         onClick = onClick
     ) {
         Row(

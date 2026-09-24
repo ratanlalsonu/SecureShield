@@ -85,7 +85,11 @@ data class InstalledAppInfo(
     val permissionsCount: Int,
     val dangerousPermissionsCount: Int,
     val scannedRiskScore: Int? = null,
-    val scannedRiskLevel: RiskLevel? = null
+    val scannedRiskLevel: RiskLevel? = null,
+    val installationEnvironment: String? = null,
+    val scanTimestamp: Long? = null,
+    val certSha256: String? = null,
+    val sensitiveFindings: List<String> = emptyList()
 )
 
 data class ProtectionStatus(

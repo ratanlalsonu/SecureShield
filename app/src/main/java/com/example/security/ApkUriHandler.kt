@@ -68,7 +68,7 @@ object ApkUriHandler {
             var bytesCopied = 0L
             val maxSizeBytes = 500L * 1024L * 1024L // 500 MB safety limit
 
-            val inputStream: InputStream? = contentResolver.openInputStream(uri)
+            val inputStream: InputStream = contentResolver.openInputStream(uri)
                 ?: return Result.failure(IllegalStateException("Unable to open input stream for URI: $uri"))
 
             inputStream.use { input ->

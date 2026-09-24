@@ -131,6 +131,55 @@ class ExampleRobolectricTest {
         val count = dao.getScanCount().first()
         assertEquals(1, count)
 
+        val allScans = dao.getAllScansList()
+        assertEquals(1, allScans.size)
+        assertEquals("com.test.target", allScans[0].packageName)
+
+        val alertDao = db.securityAlertDao()
+        val alertId = alertDao.insertAlert(
+            com.example.data.local.SecurityAlertEntity(
+                packageName = "com.test.target",
+                appName = "Target App",
+                alertType = "HIGH_RISK_APP_INSTALLED",
+                severity = "HIGH",
+                timestamp = System.currentTimeMillis(),
+                description = "High risk app installed"
+            )
+        )
+        assertTrue(alertId > 0)
+        assertEquals(1, alertDao.getAlertCount().first())
+
         db.close()
+    }
+
+    @Test
+    fun `theme preferences manager persists and restores theme configuration`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = com.example.ui.theme.ThemePreferencesManager(context)
+
+        // Initial default
+        val initial = prefs.getThemeConfig()
+        assertEquals(com.example.ui.theme.AppThemePalette.CYBER_BLUE, initial.palette)
+        assertEquals(com.example.ui.theme.ThemeMode.SYSTEM, initial.themeMode)
+        assertEquals(false, initial.amoledPureBlack)
+
+        // Save new settings
+        prefs.savePalette(com.example.ui.theme.AppThemePalette.EMERALD_SENTINEL)
+        prefs.saveThemeMode(com.example.ui.theme.ThemeMode.DARK)
+        prefs.saveAmoledPureBlack(true)
+
+        val updated = prefs.getThemeConfig()
+        assertEquals(com.example.ui.theme.AppThemePalette.EMERALD_SENTINEL, updated.palette)
+        assertEquals(com.example.ui.theme.ThemeMode.DARK, updated.themeMode)
+        assertEquals(true, updated.amoledPureBlack)
+
+        // Verify color scheme resolution with AMOLED
+        val scheme = com.example.ui.theme.resolveColorScheme(
+            palette = updated.palette,
+            darkTheme = true,
+            amoledPureBlack = updated.amoledPureBlack,
+            context = context
+        )
+        assertEquals(androidx.compose.ui.graphics.Color.Black, scheme.background)
     }
 }

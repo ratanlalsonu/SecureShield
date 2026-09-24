@@ -12,6 +12,9 @@ interface ScanResultDao {
     @Query("SELECT * FROM scan_results ORDER BY scanTimestamp DESC")
     fun getAllScans(): Flow<List<ScanResultEntity>>
 
+    @Query("SELECT * FROM scan_results")
+    suspend fun getAllScansList(): List<ScanResultEntity>
+
     @Query("SELECT * FROM scan_results WHERE apkSha256 = :sha256 LIMIT 1")
     suspend fun getScanBySha256(sha256: String): ScanResultEntity?
 

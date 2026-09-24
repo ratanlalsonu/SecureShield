@@ -17,6 +17,10 @@ import com.example.ml.MLRiskClassifier
 import com.example.monitoring.RuntimeMonitorManager
 import com.example.security.ApkAnalyzer
 import com.example.security.ApkUriHandler
+import com.example.ui.theme.AppThemePalette
+import com.example.ui.theme.ThemeConfig
+import com.example.ui.theme.ThemeMode
+import com.example.ui.theme.ThemePreferencesManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,7 +35,13 @@ import java.io.File
 
 sealed class AnalysisUiState {
     object Idle : AnalysisUiState()
-    data class Analyzing(val progress: Float, val stage: String) : AnalysisUiState()
+    data class Analyzing(
+        val progress: Float,
+        val stage: String,
+        val fileName: String? = null,
+        val fileSize: Long? = null,
+        val sourceApp: String? = null
+    ) : AnalysisUiState()
     data class Analyzed(
         val metadata: ApkMetadata,
         val evaluation: RiskEvaluation,
@@ -53,6 +63,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getDatabase(application)
     private val classifier = MLRiskClassifier(application)
     private val runtimeMonitor = RuntimeMonitorManager(application)
+    private val themePreferencesManager = ThemePreferencesManager(application)
+
+    private val _themeConfig = MutableStateFlow(themePreferencesManager.getThemeConfig())
+    val themeConfig: StateFlow<ThemeConfig> = _themeConfig.asStateFlow()
 
     private val _uiState = MutableStateFlow<AnalysisUiState>(AnalysisUiState.Idle)
     val uiState: StateFlow<AnalysisUiState> = _uiState.asStateFlow()
@@ -122,7 +136,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun loadInstalledApps() {
         viewModelScope.launch {
             _isLoadingApps.value = true
-            val apps = runtimeMonitor.getInstalledApps()
+            val apps = withContext(Dispatchers.IO) {
+                val list = runtimeMonitor.getInstalledApps()
+                val allScansList = db.scanResultDao().getAllScansList()
+                val scanMap = allScansList.associateBy { it.packageName }
+                list.map { app ->
+                    val scan = scanMap[app.packageName]
+                    if (scan != null) {
+                        val findings = try {
+                            val jsonArray = JSONArray(scan.sensitiveFindingsJson)
+                            val fList = mutableListOf<String>()
+                            for (i in 0 until jsonArray.length()) {
+                                fList.add(jsonArray.getString(i))
+                            }
+                            fList
+                        } catch (e: Exception) {
+                            emptyList()
+                        }
+                        app.copy(
+                            scannedRiskScore = scan.riskScore,
+                            scannedRiskLevel = try { RiskLevel.valueOf(scan.riskLevel) } catch (e: Exception) { null },
+                            installationEnvironment = scan.installationEnvironment,
+                            scanTimestamp = scan.scanTimestamp,
+                            certSha256 = scan.certSha256,
+                            sensitiveFindings = findings
+                        )
+                    } else {
+                        app
+                    }
+                }
+            }
             _installedApps.value = apps
             _isLoadingApps.value = false
         }
@@ -130,7 +173,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun handleIncomingUri(uri: Uri, sourceHint: String? = null) {
         viewModelScope.launch {
-            _uiState.value = AnalysisUiState.Analyzing(0.1f, "Reading APK file...")
+            _uiState.value = AnalysisUiState.Analyzing(
+                progress = 0.1f,
+                stage = "Reading and verifying incoming APK...",
+                sourceApp = sourceHint ?: "External Source"
+            )
             val resolveResult = withContext(Dispatchers.IO) {
                 ApkUriHandler.resolveAndCopyApk(getApplication(), uri, sourceHint)
             }
@@ -161,10 +208,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             db.scanResultDao().getScanBySha256(sha256)
         }
 
-        _uiState.value = AnalysisUiState.Analyzing(0.3f, "Validating APK structure & signature...")
-        delay(300)
+        _uiState.value = AnalysisUiState.Analyzing(
+            progress = 0.3f,
+            stage = "Validating APK structure & cryptographic signatures...",
+            fileName = fileName,
+            fileSize = fileSize,
+            sourceApp = sourceApp
+        )
+        delay(250)
 
-        _uiState.value = AnalysisUiState.Analyzing(0.5f, "Extracting manifest, permissions & components...")
+        _uiState.value = AnalysisUiState.Analyzing(
+            progress = 0.5f,
+            stage = "Extracting manifest, components & permissions...",
+            fileName = fileName,
+            fileSize = fileSize,
+            sourceApp = sourceApp
+        )
         val metadataResult = withContext(Dispatchers.IO) {
             ApkAnalyzer.analyzeApk(
                 context = getApplication(),
@@ -185,10 +244,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         val metadata = metadataResult.getOrThrow()
 
-        _uiState.value = AnalysisUiState.Analyzing(0.75f, "Extracting ML features (30 parameters)...")
+        _uiState.value = AnalysisUiState.Analyzing(
+            progress = 0.75f,
+            stage = "Extracting ML behavioral features (30 parameters)...",
+            fileName = fileName,
+            fileSize = fileSize,
+            sourceApp = sourceApp
+        )
         delay(250)
 
-        _uiState.value = AnalysisUiState.Analyzing(0.9f, "Running on-device ML risk inference...")
+        _uiState.value = AnalysisUiState.Analyzing(
+            progress = 0.9f,
+            stage = "Running on-device ML risk inference...",
+            fileName = fileName,
+            fileSize = fileSize,
+            sourceApp = sourceApp
+        )
         val evaluation = withContext(Dispatchers.Default) {
             classifier.evaluate(metadata)
         }
@@ -233,6 +304,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             previousScanId = existingScan?.id,
             isDuplicate = existingScan != null
         )
+    }
+
+    fun reAnalyzeCurrentApk() {
+        val current = _uiState.value
+        if (current is AnalysisUiState.Analyzed) {
+            val apkFile = File(current.metadata.localFilePath)
+            if (apkFile.exists()) {
+                viewModelScope.launch {
+                    startProgressiveAnalysis(
+                        apkFile = apkFile,
+                        fileName = current.metadata.fileName,
+                        fileSize = current.metadata.fileSize,
+                        sha256 = current.metadata.sha256,
+                        sourceApp = current.metadata.sourceApp
+                    )
+                }
+            }
+        }
     }
 
     fun initiateInstallation(environment: String) {
@@ -300,5 +389,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             db.securityAlertDao().clearAlerts()
             refreshProtectionStatus()
         }
+    }
+
+    fun setThemePalette(palette: AppThemePalette) {
+        themePreferencesManager.savePalette(palette)
+        _themeConfig.value = _themeConfig.value.copy(palette = palette)
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        themePreferencesManager.saveThemeMode(mode)
+        _themeConfig.value = _themeConfig.value.copy(themeMode = mode)
+    }
+
+    fun setAmoledPureBlack(enabled: Boolean) {
+        themePreferencesManager.saveAmoledPureBlack(enabled)
+        _themeConfig.value = _themeConfig.value.copy(amoledPureBlack = enabled)
     }
 }

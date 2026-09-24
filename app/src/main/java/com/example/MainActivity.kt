@@ -79,7 +79,8 @@ class MainActivity : ComponentActivity() {
         handleIncomingIntent(intent)
 
         setContent {
-            SecureShieldTheme {
+            val themeConfig by viewModel.themeConfig.collectAsStateWithLifecycle()
+            SecureShieldTheme(themeConfig = themeConfig) {
                 SecureShieldApp(
                     viewModel = viewModel,
                     onOpenApkUri = { uri -> viewModel.handleIncomingUri(uri) }
@@ -118,6 +119,19 @@ class MainActivity : ComponentActivity() {
                     viewModel.handleIncomingUri(uri, caller)
                 }
             }
+            Intent.ACTION_SEND_MULTIPLE -> {
+                val uris: ArrayList<Uri>? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM)
+                }
+                val targetUri = uris?.firstOrNull()
+                if (targetUri != null) {
+                    val caller = getCallingPackageName(intent)
+                    viewModel.handleIncomingUri(targetUri, caller)
+                }
+            }
         }
     }
 
@@ -140,6 +154,7 @@ fun SecureShieldApp(
     val scans by viewModel.allScans.collectAsStateWithLifecycle()
     val installedApps by viewModel.installedApps.collectAsStateWithLifecycle()
     val isLoadingApps by viewModel.isLoadingApps.collectAsStateWithLifecycle()
+    val themeConfig by viewModel.themeConfig.collectAsStateWithLifecycle()
 
     var currentTab by remember { mutableStateOf(NavigationTab.HOME) }
     var showProtectionStatusDetail by remember { mutableStateOf(false) }
@@ -168,10 +183,10 @@ fun SecureShieldApp(
                             NavigationTab.HOME -> "SecureShield"
                             NavigationTab.APPS -> "Installed Applications"
                             NavigationTab.HISTORY -> "Security Scan History"
-                            NavigationTab.SETTINGS -> "Settings & Privacy"
+                            NavigationTab.SETTINGS -> "Settings & Themes"
                         },
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onPrimary
                     )
                 },
                 navigationIcon = {
@@ -186,14 +201,14 @@ fun SecureShieldApp(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
-                                tint = Color.White
+                                tint = MaterialTheme.colorScheme.onPrimary
                             )
                         }
                     } else {
                         Icon(
                             imageVector = Icons.Default.Shield,
                             contentDescription = "Shield",
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier
                                 .padding(start = 16.dp)
                                 .size(24.dp)
@@ -201,8 +216,8 @@ fun SecureShieldApp(
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = ShieldBlueDark,
-                    titleContentColor = Color.White
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
         },
@@ -224,9 +239,9 @@ fun SecureShieldApp(
                             },
                             label = { Text(text = tab.title) },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = ShieldBluePrimary,
-                                selectedTextColor = ShieldBluePrimary,
-                                indicatorColor = ShieldBluePrimary.copy(alpha = 0.12f)
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                             ),
                             modifier = Modifier.testTag("nav_tab_${tab.name.lowercase()}")
                         )
@@ -244,7 +259,8 @@ fun SecureShieldApp(
                 ApkDetectionScreen(
                     uiState = uiState,
                     onInstall = { env -> viewModel.initiateInstallation(env) },
-                    onCancel = { viewModel.resetToIdle() }
+                    onCancel = { viewModel.resetToIdle() },
+                    onRescan = { viewModel.reAnalyzeCurrentApk() }
                 )
             } else if (showProtectionStatusDetail) {
                 ProtectionStatusScreen(
@@ -277,6 +293,10 @@ fun SecureShieldApp(
                     }
                     NavigationTab.SETTINGS -> {
                         SettingsScreen(
+                            themeConfig = themeConfig,
+                            onThemePaletteChange = { viewModel.setThemePalette(it) },
+                            onThemeModeChange = { viewModel.setThemeMode(it) },
+                            onAmoledToggle = { viewModel.setAmoledPureBlack(it) },
                             onClearDatabase = { viewModel.clearScanHistory() }
                         )
                     }

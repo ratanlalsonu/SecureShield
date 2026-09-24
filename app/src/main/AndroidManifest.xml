@@ -56,6 +56,14 @@
                 <data android:mimeType="application/vnd.android.package-archive" />
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
+
+            <!-- Intent Filter: Share multiple with APK -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/vnd.android.package-archive" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
         </activity>
 
         <!-- FileProvider for secure PackageInstaller intent sharing -->

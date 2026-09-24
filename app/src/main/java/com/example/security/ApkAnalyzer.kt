@@ -51,7 +51,7 @@ object ApkAnalyzer {
                         PackageManager.GET_SIGNATURES
             }
 
-            val packageInfo: PackageInfo? = pm.getPackageArchiveInfo(apkPath, flags)
+            val packageInfo: PackageInfo = pm.getPackageArchiveInfo(apkPath, flags)
                 ?: return Result.failure(IllegalArgumentException("Android PackageManager was unable to parse the APK archive. The file may be corrupt or incompatible."))
 
             val appInfo: ApplicationInfo = packageInfo.applicationInfo ?: ApplicationInfo()

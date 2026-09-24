@@ -6,6 +6,7 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,14 +21,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Launch
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -36,6 +39,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,7 +47,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -60,10 +64,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.example.domain.model.InstalledAppInfo
+import com.example.domain.model.RiskLevel
 import com.example.ui.theme.ShieldBluePrimary
+import com.example.ui.theme.ShieldRiskCritical
 import com.example.ui.theme.ShieldRiskHigh
 import com.example.ui.theme.ShieldRiskLow
 import com.example.ui.theme.ShieldRiskMedium
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun InstalledAppsScreen(
@@ -74,18 +83,37 @@ fun InstalledAppsScreen(
 ) {
     val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
-    var filterType by remember { mutableStateOf("USER") }
+    var selectedFilter by remember { mutableStateOf("ALL") }
     var selectedAppForDialog by remember { mutableStateOf<InstalledAppInfo?>(null) }
+    var showFindingsDialog by remember { mutableStateOf<List<String>?>(null) }
 
-    val filteredApps = remember(apps, searchQuery, filterType) {
+    val filterOptions = listOf(
+        "ALL" to "All (${apps.size})",
+        "SECURE" to "Secure Env",
+        "NORMAL" to "Normal Profile",
+        "HIGH_RISK" to "High Risk",
+        "MEDIUM_RISK" to "Medium Risk",
+        "LOW_RISK" to "Low Risk",
+        "SYSTEM" to "System Apps"
+    )
+
+    val filteredApps = remember(apps, searchQuery, selectedFilter) {
         apps.filter { app ->
             val matchesSearch = app.appName.contains(searchQuery, ignoreCase = true) ||
                     app.packageName.contains(searchQuery, ignoreCase = true)
 
-            val matchesFilter = when (filterType) {
-                "USER" -> !app.isSystemApp
+            val matchesFilter = when (selectedFilter) {
+                "ALL" -> true
+                "SECURE" -> app.isManagedProfile || app.installationEnvironment == "MANAGED_PROFILE"
+                "NORMAL" -> !app.isManagedProfile && app.installationEnvironment != "MANAGED_PROFILE" && !app.isSystemApp
+                "HIGH_RISK" -> (app.scannedRiskScore ?: 0) >= 60 ||
+                        app.scannedRiskLevel == RiskLevel.HIGH ||
+                        app.scannedRiskLevel == RiskLevel.CRITICAL
+                "MEDIUM_RISK" -> (app.scannedRiskScore ?: 0) in 30..59 ||
+                        app.scannedRiskLevel == RiskLevel.MEDIUM
+                "LOW_RISK" -> (app.scannedRiskScore != null && (app.scannedRiskScore ?: 0) < 30) ||
+                        app.scannedRiskLevel == RiskLevel.LOW
                 "SYSTEM" -> app.isSystemApp
-                "DANGEROUS" -> app.dangerousPermissionsCount > 0
                 else -> true
             }
 
@@ -128,51 +156,57 @@ fun InstalledAppsScreen(
                 Icon(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = "Refresh",
-                    tint = ShieldBluePrimary
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
         }
 
-        // Filters
+        // Horizontal filter chips
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            FilterChip(
-                selected = filterType == "USER",
-                onClick = { filterType = "USER" },
-                label = { Text("User Apps") }
-            )
-            FilterChip(
-                selected = filterType == "ALL",
-                onClick = { filterType = "ALL" },
-                label = { Text("All (${apps.size})") }
-            )
-            FilterChip(
-                selected = filterType == "DANGEROUS",
-                onClick = { filterType = "DANGEROUS" },
-                label = { Text("Sensitive Perms") }
-            )
-            FilterChip(
-                selected = filterType == "SYSTEM",
-                onClick = { filterType = "SYSTEM" },
-                label = { Text("System") }
-            )
+            filterOptions.forEach { (key, label) ->
+                FilterChip(
+                    selected = selectedFilter == key,
+                    onClick = { selectedFilter = key },
+                    label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                        selectedLabelColor = MaterialTheme.colorScheme.primary
+                    )
+                )
+            }
         }
 
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = ShieldBluePrimary)
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
         } else if (filteredApps.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = "No installed applications matching filter.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.outline
-                )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.Shield,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "No applications matching filter.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
             }
         } else {
             LazyColumn(
@@ -190,34 +224,114 @@ fun InstalledAppsScreen(
         }
     }
 
-    // App Action Dialog
+    // App Details & Action Dialog (Requirement 23)
     selectedAppForDialog?.let { app ->
+        val dateFormat = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
+        val scanDateText = if (app.scanTimestamp != null && app.scanTimestamp > 0) {
+            dateFormat.format(Date(app.scanTimestamp))
+        } else {
+            "Not scanned prior to installation"
+        }
+
+        val envText = if (app.isManagedProfile || app.installationEnvironment == "MANAGED_PROFILE") {
+            "Managed Profile (Secure Environment)"
+        } else {
+            "Normal Android Profile"
+        }
+
         AlertDialog(
             onDismissRequest = { selectedAppForDialog = null },
             title = {
-                Text(text = app.appName, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (app.icon != null) {
+                        val bm = remember(app.icon) {
+                            try { app.icon.toBitmap(64, 64) } catch (e: Exception) { null }
+                        }
+                        if (bm != null) {
+                            Image(
+                                bitmap = bm.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                        }
+                    }
+                    Text(text = app.appName, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                }
             },
             text = {
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
                         text = app.packageName,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(text = "Target SDK: ${app.targetSdk}")
-                    Text(text = "Total Permissions: ${app.permissionsCount}")
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = "• Version: ${app.versionName}", style = MaterialTheme.typography.bodySmall)
+                    Text(text = "• Target SDK: ${app.targetSdk}", style = MaterialTheme.typography.bodySmall)
                     Text(
-                        text = "Dangerous Permissions: ${app.dangerousPermissionsCount}",
-                        color = if (app.dangerousPermissionsCount > 0) ShieldRiskHigh else ShieldRiskLow,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "Android sandboxes this application with a distinct Linux UID. Storage isolation is enforced according to target SDK Scoped Storage rules.",
+                        text = "• Permissions: ${app.permissionsCount} total (${app.dangerousPermissionsCount} sensitive)",
                         style = MaterialTheme.typography.bodySmall,
+                        color = if (app.dangerousPermissionsCount > 0) ShieldRiskMedium else MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "• Environment: $envText",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(text = "• Status: Installed & Active", style = MaterialTheme.typography.bodySmall)
+
+                    if (app.scannedRiskScore != null) {
+                        val riskColor = when (app.scannedRiskLevel) {
+                            RiskLevel.CRITICAL -> ShieldRiskCritical
+                            RiskLevel.HIGH -> ShieldRiskHigh
+                            RiskLevel.MEDIUM -> ShieldRiskMedium
+                            else -> ShieldRiskLow
+                        }
+                        Text(
+                            text = "• Risk Score: ${app.scannedRiskScore}/100 (${app.scannedRiskLevel?.label ?: "ASSESSED"})",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = riskColor
+                        )
+                    } else {
+                        Text(
+                            text = "• Risk Score: Not pre-scanned by SecureShield",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+
+                    Text(
+                        text = "• Last Scan: $scanDateText",
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline
                     )
+
+                    if (app.certSha256 != null) {
+                        Text(
+                            text = "• Cert SHA-256: ${app.certSha256.take(16)}...",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+
+                    if (app.sensitiveFindings.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        OutlinedButton(
+                            onClick = {
+                                showFindingsDialog = app.sensitiveFindings
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(imageVector = Icons.Default.Assessment, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("View Scan Findings (${app.sensitiveFindings.size})", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
                 }
             },
             confirmButton = {
@@ -236,11 +350,12 @@ fun InstalledAppsScreen(
                 }
             },
             dismissButton = {
-                Row {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
                         onClick = {
                             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                                 data = Uri.parse("package:${app.packageName}")
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
                             }
                             context.startActivity(intent)
                             selectedAppForDialog = null
@@ -249,11 +364,11 @@ fun InstalledAppsScreen(
                         Text("App Info")
                     }
                     if (!app.isSystemApp) {
-                        Spacer(modifier = Modifier.width(8.dp))
                         OutlinedButton(
                             onClick = {
                                 val uninstallIntent = Intent(Intent.ACTION_DELETE).apply {
                                     data = Uri.parse("package:${app.packageName}")
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
                                 }
                                 context.startActivity(uninstallIntent)
                                 selectedAppForDialog = null
@@ -267,6 +382,37 @@ fun InstalledAppsScreen(
             }
         )
     }
+
+    // Findings dialog
+    showFindingsDialog?.let { findings ->
+        AlertDialog(
+            onDismissRequest = { showFindingsDialog = null },
+            title = {
+                Text("Security Findings", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    findings.forEach { finding ->
+                        Row(verticalAlignment = Alignment.Top) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = ShieldRiskMedium,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = finding, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { showFindingsDialog = null }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -274,6 +420,8 @@ private fun InstalledAppRow(
     app: InstalledAppInfo,
     onClick: () -> Unit
 ) {
+    val isSecure = app.isManagedProfile || app.installationEnvironment == "MANAGED_PROFILE"
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -320,15 +468,38 @@ private fun InstalledAppRow(
                         text = app.appName,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
-                        maxLines = 1
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
-                    if (app.dangerousPermissionsCount > 0) {
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    if (app.scannedRiskScore != null) {
+                        val badgeColor = when (app.scannedRiskLevel) {
+                            RiskLevel.CRITICAL -> ShieldRiskCritical
+                            RiskLevel.HIGH -> ShieldRiskHigh
+                            RiskLevel.MEDIUM -> ShieldRiskMedium
+                            else -> ShieldRiskLow
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = badgeColor.copy(alpha = 0.12f)
+                        ) {
+                            Text(
+                                text = "Risk ${app.scannedRiskScore}",
+                                color = badgeColor,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    } else if (app.dangerousPermissionsCount > 0) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = ShieldRiskMedium.copy(alpha = 0.12f)
                         ) {
                             Text(
-                                text = "${app.dangerousPermissionsCount} Sensitive",
+                                text = "${app.dangerousPermissionsCount} Perms",
                                 color = ShieldRiskMedium,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
@@ -337,17 +508,43 @@ private fun InstalledAppRow(
                         }
                     }
                 }
+
                 Text(
                     text = app.packageName,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1
                 )
-                Text(
-                    text = "v${app.versionName} • Target SDK ${app.targetSdk}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline
-                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "v${app.versionName} • Target ${app.targetSdk}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = if (isSecure) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Gray.copy(alpha = 0.1f)
+                    ) {
+                        Text(
+                            text = if (isSecure) "Secure Env" else "Normal",
+                            color = if (isSecure) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 10.sp,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+                }
             }
         }
     }
@@ -358,13 +555,13 @@ private fun FallbackAppRowIcon() {
     Box(
         modifier = Modifier
             .size(44.dp)
-            .background(ShieldBluePrimary.copy(alpha = 0.1f), RoundedCornerShape(8.dp)),
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), RoundedCornerShape(8.dp)),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = Icons.Default.Shield,
             contentDescription = null,
-            tint = ShieldBluePrimary,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(24.dp)
         )
     }
