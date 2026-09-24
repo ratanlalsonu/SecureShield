@@ -1,0 +1,261 @@
+{
+  "model_name": "SecureShield-RiskClassifier",
+  "version": "1.0.0",
+  "dataset": "CICMalDroid-2020-Derived",
+  "algorithm": "Regularized Logistic Classifier",
+  "metrics": {
+    "accuracy": 0.9933,
+    "precision": 0.9933,
+    "recall": 0.9933,
+    "f1_score": 0.9933,
+    "confusion_matrix": {
+      "TP": 298,
+      "FP": 2,
+      "TN": 298,
+      "FN": 2
+    }
+  },
+  "bias": -0.925844,
+  "features": [
+    {
+      "order": 0,
+      "name": "permission_count",
+      "type": "numeric",
+      "mean": 12.4,
+      "std": 10.2,
+      "weight": 1.113825
+    },
+    {
+      "order": 1,
+      "name": "dangerous_permission_count",
+      "type": "numeric",
+      "mean": 3.8,
+      "std": 4.1,
+      "weight": 1.943318
+    },
+    {
+      "order": 2,
+      "name": "has_sms_permissions",
+      "type": "binary",
+      "mean": 0.12,
+      "std": 0.32,
+      "weight": 0.566103
+    },
+    {
+      "order": 3,
+      "name": "has_call_phone_permissions",
+      "type": "binary",
+      "mean": 0.15,
+      "std": 0.35,
+      "weight": 0.529675
+    },
+    {
+      "order": 4,
+      "name": "has_contacts_permissions",
+      "type": "binary",
+      "mean": 0.18,
+      "std": 0.38,
+      "weight": 0.712628
+    },
+    {
+      "order": 5,
+      "name": "has_location_permissions",
+      "type": "binary",
+      "mean": 0.35,
+      "std": 0.47,
+      "weight": 0.612477
+    },
+    {
+      "order": 6,
+      "name": "has_camera_permission",
+      "type": "binary",
+      "mean": 0.28,
+      "std": 0.44,
+      "weight": 0.086481
+    },
+    {
+      "order": 7,
+      "name": "has_audio_record_permission",
+      "type": "binary",
+      "mean": 0.16,
+      "std": 0.36,
+      "weight": 0.630127
+    },
+    {
+      "order": 8,
+      "name": "has_system_alert_window",
+      "type": "binary",
+      "mean": 0.14,
+      "std": 0.34,
+      "weight": 0.978818
+    },
+    {
+      "order": 9,
+      "name": "has_request_install_packages",
+      "type": "binary",
+      "mean": 0.09,
+      "std": 0.28,
+      "weight": 0.518199
+    },
+    {
+      "order": 10,
+      "name": "has_receive_boot_completed",
+      "type": "binary",
+      "mean": 0.42,
+      "std": 0.49,
+      "weight": 0.29536
+    },
+    {
+      "order": 11,
+      "name": "has_internet_permission",
+      "type": "binary",
+      "mean": 0.88,
+      "std": 0.32,
+      "weight": 0.031145
+    },
+    {
+      "order": 12,
+      "name": "has_external_storage_write",
+      "type": "binary",
+      "mean": 0.45,
+      "std": 0.49,
+      "weight": 0.444891
+    },
+    {
+      "order": 13,
+      "name": "has_read_phone_state",
+      "type": "binary",
+      "mean": 0.38,
+      "std": 0.48,
+      "weight": 0.845301
+    },
+    {
+      "order": 14,
+      "name": "comb_storage_and_network",
+      "type": "binary",
+      "mean": 0.42,
+      "std": 0.49,
+      "weight": 0.37978
+    },
+    {
+      "order": 15,
+      "name": "comb_location_and_network",
+      "type": "binary",
+      "mean": 0.33,
+      "std": 0.47,
+      "weight": 0.349935
+    },
+    {
+      "order": 16,
+      "name": "comb_camera_and_mic",
+      "type": "binary",
+      "mean": 0.14,
+      "std": 0.34,
+      "weight": -0.000483
+    },
+    {
+      "order": 17,
+      "name": "comb_sms_and_network",
+      "type": "binary",
+      "mean": 0.11,
+      "std": 0.31,
+      "weight": 0.274168
+    },
+    {
+      "order": 18,
+      "name": "comb_boot_and_service",
+      "type": "binary",
+      "mean": 0.36,
+      "std": 0.48,
+      "weight": 0.678327
+    },
+    {
+      "order": 19,
+      "name": "comb_install_and_network",
+      "type": "binary",
+      "mean": 0.08,
+      "std": 0.27,
+      "weight": 0.236622
+    },
+    {
+      "order": 20,
+      "name": "activity_count",
+      "type": "numeric",
+      "mean": 14.2,
+      "std": 18.5,
+      "weight": 0.5884
+    },
+    {
+      "order": 21,
+      "name": "service_count",
+      "type": "numeric",
+      "mean": 4.1,
+      "std": 6.8,
+      "weight": 1.155859
+    },
+    {
+      "order": 22,
+      "name": "receiver_count",
+      "type": "numeric",
+      "mean": 3.6,
+      "std": 5.2,
+      "weight": 1.344738
+    },
+    {
+      "order": 23,
+      "name": "provider_count",
+      "type": "numeric",
+      "mean": 1.2,
+      "std": 2.1,
+      "weight": 0.679717
+    },
+    {
+      "order": 24,
+      "name": "exported_component_count",
+      "type": "numeric",
+      "mean": 2.8,
+      "std": 4.5,
+      "weight": 1.326126
+    },
+    {
+      "order": 25,
+      "name": "native_lib_count",
+      "type": "numeric",
+      "mean": 2.4,
+      "std": 4.8,
+      "weight": 0.194342
+    },
+    {
+      "order": 26,
+      "name": "has_native_libs",
+      "type": "binary",
+      "mean": 0.32,
+      "std": 0.46,
+      "weight": 0.11495
+    },
+    {
+      "order": 27,
+      "name": "dex_count",
+      "type": "numeric",
+      "mean": 1.6,
+      "std": 1.2,
+      "weight": 0.790951
+    },
+    {
+      "order": 28,
+      "name": "target_sdk_is_legacy",
+      "type": "binary",
+      "mean": 0.22,
+      "std": 0.41,
+      "weight": 0.742203
+    },
+    {
+      "order": 29,
+      "name": "cert_is_self_signed",
+      "type": "binary",
+      "mean": 0.29,
+      "std": 0.45,
+      "weight": 0.785566
+    }
+  ]
+}

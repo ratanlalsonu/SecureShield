@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">SecureShield</string>
+    <string name="tagline">Run Unknown Apps. Stay Safe. Keep Your Storage Private.</string>
+    <string name="project_title">ML-Based Android App Security and Storage Isolation</string>
+</resources>

@@ -1,0 +1,6 @@
+{
+  "name": "SecureShield",
+  "description": "ML-Based Android App Security and Storage Isolation. Run Unknown Apps. Stay Safe. Keep Your Storage Private.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
